@@ -27,3 +27,5 @@ black>=23.7.0
 flake8>=6.0.0
 
 cloudscraper
+playwright
+beautifulsoup4
