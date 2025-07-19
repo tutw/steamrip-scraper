@@ -38,3 +38,4 @@ jobs:
           name: steamrip-games-${{ github.run_number }}
           path: |
             output/*.json
+ 
