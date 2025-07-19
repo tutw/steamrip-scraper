@@ -1,162 +1,41 @@
 name: SteamRip Scraper
 
 on:
-  # Ejecución automática cada 4 horas
-  schedule:
-    - cron: '0 */4 * * *'
-  
-  # Ejecución manual con parámetros
   workflow_dispatch:
-    inputs:
-      max_games:
-        description: 'Máximo número de juegos (0 = todos)'
-        required: false
-        default: '0'
-        type: string
-      create_release:
-        description: 'Crear release con los resultados'
-        required: false
-        default: true
-        type: boolean
-      test_mode:
-        description: 'Ejecutar en modo prueba (20 juegos)'
-        required: false
-        default: false
-        type: boolean
+  push:
+    branches:
+      - main
 
 jobs:
-  scrape:
+  run-scraper:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        
-    - name: Configure environment
-      run: |
-        echo "STEAMRIP_BASE_URL=https://steamrip.com/games-list-page/" >> $GITHUB_ENV
-        echo "REQUEST_DELAY=2.5" >> $GITHUB_ENV
-        echo "REQUEST_TIMEOUT=30" >> $GITHUB_ENV
-        echo "LOG_LEVEL=INFO" >> $GITHUB_ENV
-        echo "OUTPUT_DIR=output" >> $GITHUB_ENV
-        echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
-        echo "GITHUB_REPOSITORY=${{ github.repository }}" >> $GITHUB_ENV
-        
-    - name: Run scraper
-      run: |
-        # Determinar parámetros de ejecución
-        if [ "${{ github.event.inputs.test_mode }}" = "true" ]; then
-          python steamrip_scraper.py --test
-        elif [ "${{ github.event.inputs.max_games }}" != "0" ] && [ -n "${{ github.event.inputs.max_games }}" ]; then
-          python steamrip_scraper.py --max-games ${{ github.event.inputs.max_games }}
-        else
-          python steamrip_scraper.py
-        fi
-        
-    - name: Upload JSON results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: steamrip-games-${{ github.run_number }}
-        path: |
-          output/*.json
-          scraper.log
-        retention-days: 30
-        
-    - name: Create Release
-      if: github.event.inputs.create_release == 'true' && github.event_name == 'workflow_dispatch'
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: scrape-${{ github.run_number }}
-        release_name: SteamRip Games Data - ${{ github.run_number }}
-        body: |
-          Datos de juegos de SteamRip extraídos automáticamente
-          
-          **Ejecución:** ${{ github.run_number }}
-          **Fecha:** ${{ steps.date.outputs.date }}
-          **Trigger:** ${{ github.event_name }}
-          
-          Los archivos JSON con los datos están disponibles en los artifacts de esta ejecución.
-        draft: false
-        prerelease: false
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Cleanup old artifacts
-      uses: actions/github-script@v7
-      with:
-        script: |
-          // Mantener solo los últimos 10 artifacts
-          const artifacts = await github.rest.actions.listArtifactsForRepo({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-          });
-          
-          const steamripArtifacts = artifacts.data.artifacts
-            .filter(artifact => artifact.name.startsWith('steamrip-games-'))
-            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-          
-          if (steamripArtifacts.length > 10) {
-            for (let i = 10; i < steamripArtifacts.length; i++) {
-              await github.rest.actions.deleteArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: steamripArtifacts[i].id,
-              });
-            }
-          }
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
 
-    - name: Notify on failure
-      if: failure()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          github.rest.issues.create({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            title: `🚨 Scraper Failed - Run ${context.runNumber}`,
-            body: `El scraper de SteamRip falló en la ejecución ${context.runNumber}.
-            
-            **Detalles:**
-            - Workflow: ${context.workflow}
-            - Run ID: ${context.runId}
-            - Trigger: ${context.eventName}
-            
-            Por favor revisa los logs para más información.`,
-            labels: ['bug', 'scraper-failure']
-          });
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install cloudscraper
 
-  # Job adicional para generar estadísticas
-  stats:
-    runs-on: ubuntu-latest
-    needs: scrape
-    if: always()
-    
-    steps:
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: steamrip-games-${{ github.run_number }}
-        path: ./artifacts
-        
-    - name: Generate stats
-      run: |
-        echo "📊 Generando estadísticas..."
-        if [ -f ./artifacts/output/*.json ]; then
-          echo "✅ Archivos JSON encontrados"
-          echo "📁 Contenido del directorio:"
-          ls -la ./artifacts/
-        else
-          echo "❌ No se encontraron archivos JSON"
-        fi
+      - name: Set environment variables
+        run: echo "STEAMRIP_BASE_URL=https://steamrip.com/games-list-page/" >> $GITHUB_ENV
+
+      - name: Run SteamRip Scraper
+        run: |
+          python steamrip_scraper.py --output output/steamrip_games_${{ github.run_id }}.json
+
+      - name: Upload output JSON and log
+        uses: actions/upload-artifact@v4
+        with:
+          name: steamrip-games-${{ github.run_number }}
+          path: |
+            output/*.json
+            scraper.log
