@@ -10,6 +10,9 @@ jobs:
   run-scraper:
     runs-on: ubuntu-latest
 
+    env:
+      MAX_GAMES: 20   # Cambia este valor para ajustar el límite de juegos
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,9 +28,9 @@ jobs:
           pip install -r requirements.txt
           python -m playwright install
 
-      - name: Run Playwright Scraper
+      - name: Run Playwright Scraper (limite de juegos)
         run: |
-          python steamrip_playwright_scraper.py --output output/steamrip_games_${{ github.run_id }}.json
+          python steamrip_playwright_scraper.py --max-games $MAX_GAMES --output output/steamrip_games_${{ github.run_id }}.json
 
       - name: Upload output JSON
         uses: actions/upload-artifact@v4
