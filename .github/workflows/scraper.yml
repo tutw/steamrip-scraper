@@ -1,4 +1,4 @@
-name: SteamRip Scraper
+name: SteamRip Playwright Scraper
 
 on:
   workflow_dispatch:
@@ -23,19 +23,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install cloudscraper
+          python -m playwright install
 
-      - name: Set environment variables
-        run: echo "STEAMRIP_BASE_URL=https://steamrip.com/games-list-page/" >> $GITHUB_ENV
-
-      - name: Run SteamRip Scraper
+      - name: Run Playwright Scraper
         run: |
-          python steamrip_scraper.py --output output/steamrip_games_${{ github.run_id }}.json
+          python steamrip_playwright_scraper.py --output output/steamrip_games_${{ github.run_id }}.json
 
-      - name: Upload output JSON and log
+      - name: Upload output JSON
         uses: actions/upload-artifact@v4
         with:
           name: steamrip-games-${{ github.run_number }}
           path: |
             output/*.json
-            scraper.log
