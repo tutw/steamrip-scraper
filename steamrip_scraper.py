@@ -6,7 +6,7 @@ Un scraper robusto y configurable para extraer información de juegos
 desde SteamRip.com con soporte para ejecución automática.
 """
 
-import requests
+import cloudscraper  # <--- usa cloudscraper en vez de requests
 from bs4 import BeautifulSoup
 import json
 import time
@@ -21,16 +21,19 @@ from config import Config
 class SteamRipScraper:
     def __init__(self, config=None):
         self.config = config or Config()
-        self.session = requests.Session()
+        # Usar cloudscraper para evadir Cloudflare y bloqueos comunes
+        self.session = cloudscraper.create_scraper()
         self.session.headers.update({
-            'User-Agent': self.config.USER_AGENT,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
+            'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
+            'Referer': 'https://steamrip.com/',
+            'Origin': 'https://steamrip.com',
+            'Cache-Control': 'no-cache',
         })
-        
         # Configurar logging
         logging.basicConfig(
             level=getattr(logging, self.config.LOG_LEVEL),
@@ -56,13 +59,19 @@ class SteamRipScraper:
 
     def make_request(self, url, max_retries=3):
         """Hacer petición HTTP con reintentos y manejo de errores"""
+        # Realiza una petición a la home para obtener cookies antes de acceder al listado
+        try:
+            self.session.get('https://steamrip.com/', timeout=self.config.REQUEST_TIMEOUT)
+        except Exception:
+            pass  # Si falla, continúa igual
+        
         for attempt in range(max_retries):
             try:
                 response = self.session.get(url, timeout=self.config.REQUEST_TIMEOUT)
                 response.raise_for_status()
                 time.sleep(self.config.REQUEST_DELAY)
                 return response
-            except requests.exceptions.RequestException as e:
+            except Exception as e:
                 self.logger.warning(f"Error en intento {attempt + 1} para {url}: {e}")
                 if attempt == max_retries - 1:
                     self.stats['errors'] += 1
