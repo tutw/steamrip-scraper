@@ -29,6 +29,21 @@ def get_game_links(page):
     print(f"Encontrados {len(game_links)} enlaces de juegos")
     return game_links
 
+def get_first_youtube_video(page, game_name):
+    # Construye la URL de búsqueda
+    query = f"{game_name} gameplay".replace(" ", "+")
+    youtube_search_url = f"https://www.youtube.com/results?search_query={query}"
+    page.goto(youtube_search_url)
+    time.sleep(3)
+    html = page.content()
+    soup = BeautifulSoup(html, "html.parser")
+    # Busca el primer enlace de video
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if href.startswith("/watch"):
+            return f"https://www.youtube.com{href}"
+    return youtube_search_url  # Fallback: devuelve la búsqueda si no encuentra video
+
 def extract_game_info(page, game_url):
     page.goto(game_url)
     time.sleep(2)
@@ -61,7 +76,7 @@ def extract_game_info(page, game_url):
             screenshots.append(urljoin(game_url, src))
 
     download_links = {}
-    youtube_search = f"https://www.youtube.com/results?search_query={game_name.replace(' ', '+')}+gameplay"
+    youtube_gameplay = get_first_youtube_video(page, game_name)
     additional_info = {}
 
     game_data = {
@@ -70,7 +85,7 @@ def extract_game_info(page, game_url):
         'description': description[:500] + '...' if len(description) > 500 else description,
         'cover_image': cover_image,
         'screenshots': screenshots,
-        'youtube_gameplay': youtube_search,
+        'youtube_gameplay': youtube_gameplay,
         'download_links': download_links,
         'additional_info': additional_info,
         'scraped_url': game_url,
